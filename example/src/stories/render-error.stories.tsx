@@ -19,23 +19,11 @@ const meta: Meta<typeof BrokenComponent> = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Primary: Story = {
-  args: {},
-};
-
-export const Secondary: Story = {
+export const UndefinedVariable: Story = {
   args: {},
   render: () => {
     // Another render error
     const undefinedVariable = undefined;
     return <div>{undefinedVariable.property}</div>;
-  },
-};
-
-export const Tertiary: Story = {
-  args: {},
-  render: () => {
-    // Component that returns null (might cause issues)
-    return null;
   },
 };
