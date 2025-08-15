@@ -168,7 +168,6 @@ The script provides human-readable output with:
 ❌ typeScript: FAIL
    Error: Type error details...
 ✅ csfCompliance: PASS
-✅ conventionAdherence: PASS
 ❌ renderTest: FAIL
    Error: Render error details...
 ⏭️ interactionTest: SKIP
@@ -199,7 +198,6 @@ This provides structured JSON output:
     "linting": { "status": "PASS", "error": null },
     "typeScript": { "status": "FAIL", "error": "Type error details..." },
     "csfCompliance": { "status": "PASS", "csfVersion": "CSF3" },
-    "conventionAdherence": { "status": "PASS", "violations": [] },
     "renderTest": { "status": "FAIL", "error": "Render error details..." },
     "interactionTest": { "status": "SKIP", "error": "Render test failed" }
   },

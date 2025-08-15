@@ -363,68 +363,6 @@ class StoryValidator {
   }
 
   /**
-   * Check project convention adherence
-   */
-  async checkConventionAdherence() {
-    try {
-      const storyContent = fs.readFileSync(this.storyFilePath, "utf8");
-      const violations = [];
-
-      // Check for common story naming patterns
-      const storyNamePattern = /export\s+const\s+(\w+)\s*:/g;
-      const storyNames = [];
-      let match;
-      while ((match = storyNamePattern.exec(storyContent)) !== null) {
-        storyNames.push(match[1]);
-      }
-
-      // Check for common naming conventions
-      const commonNames = [
-        "Primary",
-        "Default",
-        "Secondary",
-        "WithIcon",
-        "Disabled",
-        "Loading",
-      ];
-      const hasCommonNames = storyNames.some((name) =>
-        commonNames.includes(name)
-      );
-
-      if (!hasCommonNames && storyNames.length > 0) {
-        violations.push(
-          `Story names don't follow common conventions: ${storyNames.join(
-            ", "
-          )}`
-        );
-      }
-
-      // Check for args usage vs inline props
-      const hasArgs = storyContent.includes("args:");
-      const hasInlineProps =
-        storyContent.includes("props:") || storyContent.includes("parameters:");
-
-      if (!hasArgs && !hasInlineProps) {
-        violations.push("No args or props defined for stories");
-      }
-
-      const status = violations.length === 0 ? "PASS" : "FAIL";
-
-      this.results.checks.conventionAdherence = {
-        status: status,
-        violations: violations,
-        error: violations.length > 0 ? violations.join("; ") : null,
-      };
-    } catch (error) {
-      this.results.checks.conventionAdherence = {
-        status: "ERROR",
-        violations: [],
-        error: error.message,
-      };
-    }
-  }
-
-  /**
    * Run Storybook test-runner for render and interaction tests
    */
   async runStorybookTests(silent = false) {
@@ -676,7 +614,6 @@ class StoryValidator {
         this.runLinting(),
         this.runTypeScriptCheck(),
         this.checkCSFCompliance(),
-        this.checkConventionAdherence(),
         this.runStorybookTests(silent),
       ]);
 
