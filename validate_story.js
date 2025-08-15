@@ -9,7 +9,15 @@
  * 3. Render Test (Storybook test-runner)
  * 4. Component Story Format (CSF) compliance
  *
- * Usage: node validate_story.js <story_file_path>
+ * Usage: node validate_story.js <story_file_path> [--json]
+ *
+ * Options:
+ *   --json    Output results in JSON format for programmatic use
+ *
+ * Exit Codes:
+ *   0 - All checks passed
+ *   1 - Critical failures (overall status: FAIL)
+ *   2 - Warnings (overall status: WARNING)
  */
 
 const { execSync, spawn } = require("child_process");
@@ -392,179 +400,184 @@ class StoryValidator {
         console.log(`🧪 Running test-storybook for story: ${storyName}`);
       }
 
-      // Run test-storybook (it will test all stories, but we can filter results)
-      const result = execSync(
-        `npx test-storybook --url=http://127.0.0.1:${this.storybookPort}`,
-        {
-          cwd: this.projectRoot,
-          encoding: "utf8",
-          stdio: "pipe",
-          timeout: 60000, // 60 second timeout (increased for Storybook startup)
-        }
+      // Run test-storybook on the specific story file
+      const relativeStoryPath = path.relative(
+        this.projectRoot,
+        this.storyFilePath
       );
 
-      // Parse test results to check if our specific story passed
-      const testOutput = result.toString();
-
-      // Check if the story file was tested and if it passed
-      const storyTestPattern = new RegExp(`${storyName}\\.stories\\.tsx`, "i");
-      const hasStoryTests = storyTestPattern.test(testOutput);
-
-      if (!hasStoryTests) {
-        this.results.checks.renderTest = {
-          status: "SKIP",
-          error: "Story not found in test output",
-        };
-        this.results.checks.interactionTest = {
-          status: "SKIP",
-          error: "Story not found in test output",
-        };
-        return;
-      }
-
-      // Check for test failures in our story
-      const storyFailPattern = new RegExp(
-        `FAIL.*${storyName}\\.stories\\.tsx`,
-        "i"
-      );
-      const hasFailures = storyFailPattern.test(testOutput);
-
-      if (hasFailures) {
-        // Extract error details for the specific story
-        const errorMatch = testOutput.match(
-          new RegExp(
-            `FAIL.*${storyName}[\\s\\S]*?Message:[\\s\\S]*?at example`,
-            "i"
-          )
-        );
-        const errorDetails = errorMatch
-          ? errorMatch[0]
-          : "Test failures detected";
-
-        this.results.checks.renderTest = {
-          status: "FAIL",
-          error:
-            errorDetails.substring(0, 500) +
-            (errorDetails.length > 500 ? "..." : ""),
-        };
-        this.results.checks.interactionTest = {
-          status: "FAIL",
-          error:
-            errorDetails.substring(0, 500) +
-            (errorDetails.length > 500 ? "..." : ""),
-        };
-      } else {
-        this.results.checks.renderTest = {
-          status: "PASS",
-          error: null,
-        };
-        this.results.checks.interactionTest = {
-          status: "PASS",
-          error: null,
-        };
-      }
-    } catch (error) {
-      // Even if test-runner fails, we might have output to parse
-      const errorOutput = error.stdout || error.message;
-      const testOutput = errorOutput.toString();
-
-      // Try to parse the test output even from the error
-      if (
-        (testOutput && testOutput.includes("FAIL")) ||
-        testOutput.includes("PASS")
-      ) {
-        // Extract story name for parsing
-        const fileName = path.basename(
-          this.storyFilePath,
-          path.extname(this.storyFilePath)
-        );
-        const storyName = fileName.replace(".stories", "");
-
-        // Check if the story file was tested and if it passed
-        const storyTestPattern = new RegExp(
-          `${storyName}\\.stories\\.tsx`,
-          "i"
-        );
-        const hasStoryTests = storyTestPattern.test(testOutput);
-
-        if (hasStoryTests) {
-          // Check for test failures in our story
-          const storyFailPattern = new RegExp(
-            `FAIL.*${storyName}\\.stories\\.tsx`,
-            "i"
-          );
-          const hasFailures = storyFailPattern.test(testOutput);
-
-          if (hasFailures) {
-            // Extract error details for the specific story
-            const errorMatch = testOutput.match(
-              new RegExp(
-                `FAIL.*${storyName}[\\s\\S]*?Message:[\\s\\S]*?at example`,
-                "i"
-              )
-            );
-            const errorDetails = errorMatch
-              ? errorMatch[0]
-              : "Test failures detected";
-
-            this.results.checks.renderTest = {
-              status: "FAIL",
-              error:
-                errorDetails.substring(0, 500) +
-                (errorDetails.length > 500 ? "..." : ""),
-            };
-            this.results.checks.interactionTest = {
-              status: "FAIL",
-              error:
-                errorDetails.substring(0, 500) +
-                (errorDetails.length > 500 ? "..." : ""),
-            };
-          } else {
-            this.results.checks.renderTest = {
-              status: "PASS",
-              error: null,
-            };
-            this.results.checks.interactionTest = {
-              status: "PASS",
-              error: null,
-            };
+      let testOutput;
+      try {
+        // Try to run test-storybook and capture output
+        const result = execSync(
+          `npx test-storybook "${relativeStoryPath}" --url=http://127.0.0.1:${this.storybookPort}`,
+          {
+            cwd: this.projectRoot,
+            encoding: "utf8",
+            stdio: "pipe",
+            timeout: 60000, // 60 second timeout (increased for Storybook startup)
           }
-        } else {
-          this.results.checks.renderTest = {
-            status: "SKIP",
-            error: "Story not found in test output",
-          };
-          this.results.checks.interactionTest = {
-            status: "SKIP",
-            error: "Story not found in test output",
-          };
-        }
-      } else {
-        // Fallback to old error handling
-        if (errorOutput.includes("render") || errorOutput.includes("mount")) {
-          this.results.checks.renderTest = {
-            status: "FAIL",
-            error: errorOutput,
-          };
-          this.results.checks.interactionTest = {
-            status: "SKIP",
-            error: "Render test failed, skipping interaction test",
-          };
-        } else {
-          this.results.checks.renderTest = {
-            status: "PASS",
-            error: null,
-          };
-          this.results.checks.interactionTest = {
-            status: "FAIL",
-            error: errorOutput,
-          };
-        }
+        );
+        testOutput = result.toString();
+      } catch (error) {
+        // If execSync fails, try to capture the output from the error
+        // The important output might be in stdout even when the command fails
+        testOutput = error.stderr.toString();
       }
+
+      // Now we have testOutput regardless of success or failure
+      // Parse test results to distinguish between render and interaction tests
+      const testResults = this.parseTestOutput(testOutput, storyName);
+
+      this.results.checks.renderTest = testResults.renderTest;
+      this.results.checks.interactionTest = testResults.interactionTest;
     } finally {
       // Always stop Storybook after tests, regardless of success/failure
       await this.stopStorybook(silent);
     }
+  }
+
+  /**
+   * Parse test output to distinguish between render and interaction test failures
+   */
+  parseTestOutput(testOutput, storyName) {
+    // Since we're now testing only the specific story, the output should be cleaner
+    // Check if the story was found in the test output
+    const storyTestPattern = new RegExp(`${storyName}\\.stories\\.tsx`, "i");
+    const hasStoryTests = storyTestPattern.test(testOutput);
+
+    if (!hasStoryTests) {
+      return {
+        renderTest: {
+          status: "SKIP",
+          error: "Story not found in test output",
+        },
+        interactionTest: {
+          status: "SKIP",
+          error: "Story not found in test output",
+        },
+      };
+    }
+
+    // Check for test failures in our story
+    const storyFailPattern = new RegExp(
+      `FAIL.*${storyName}\\.stories\\.tsx`,
+      "i"
+    );
+    const hasFailures = storyFailPattern.test(testOutput);
+
+    if (!hasFailures) {
+      return {
+        renderTest: {
+          status: "PASS",
+          error: null,
+        },
+        interactionTest: {
+          status: "PASS",
+          error: null,
+        },
+      };
+    }
+
+    // Extract specific test failures
+    const renderTestResult = this.parseRenderTestFailure(testOutput, storyName);
+    const interactionTestResult = this.parseInteractionTestFailure(
+      testOutput,
+      storyName
+    );
+
+    return {
+      renderTest: renderTestResult,
+      interactionTest: interactionTestResult,
+    };
+  }
+
+  /**
+   * Parse render test (smoke test) failures
+   */
+  parseRenderTestFailure(testOutput, storyName) {
+    // First, check if this story has smoke tests at all
+    const hasSmokeTests = /\●.*›.*› smoke-test/i.test(testOutput);
+
+    if (!hasSmokeTests) {
+      return {
+        status: "SKIP",
+        error: "No smoke tests found for this story",
+      };
+    }
+
+    // Look for smoke-test failures specifically for this story
+    // The pattern should match: ● Test/StoryName › StoryName › smoke-test
+    // and the error should be related to this specific story
+    const smokeTestPattern = new RegExp(
+      `●.*›.*› smoke-test[\\s\\S]*?Message:[\\s\\S]*?at.*${storyName}`,
+      "i"
+    );
+
+    const smokeTestMatch = testOutput.match(smokeTestPattern);
+
+    if (smokeTestMatch) {
+      // Extract the error message from the smoke test
+      const errorMessageMatch = smokeTestMatch[0].match(/Message:\s*([^\n]+)/);
+      const errorMessage = errorMessageMatch
+        ? errorMessageMatch[1].trim()
+        : "Render test failed";
+
+      return {
+        status: "FAIL",
+        error: `Render test failed: ${errorMessage}`,
+      };
+    }
+
+    // If smoke tests exist but no failure detected, they passed
+    return {
+      status: "PASS",
+      error: null,
+    };
+  }
+
+  /**
+   * Parse interaction test (play test) failures
+   */
+  parseInteractionTestFailure(testOutput, storyName) {
+    // First, check if this story has play tests at all
+    const hasPlayTests = /\●.*›.*› play-test/i.test(testOutput);
+
+    if (!hasPlayTests) {
+      return {
+        status: "SKIP",
+        error: "No play tests found for this story",
+      };
+    }
+
+    // Look for play-test failures specifically for this story
+    // The pattern should match: ● Test/StoryName › StoryName › play-test
+    // and the error should be related to this specific story
+    const playTestPattern = new RegExp(
+      `●.*›.*› play-test[\\s\\S]*?Message:[\\s\\S]*?at.*${storyName}`,
+      "i"
+    );
+
+    const playTestMatch = testOutput.match(playTestPattern);
+
+    if (playTestMatch) {
+      // Extract the error message from the play test
+      const errorMessageMatch = playTestMatch[0].match(/Message:\s*([^\n]+)/);
+      const errorMessage = errorMessageMatch
+        ? errorMessageMatch[1].trim()
+        : "Interaction test failed";
+
+      return {
+        status: "FAIL",
+        error: `Interaction test failed: ${errorMessage}`,
+      };
+    }
+
+    // If play tests exist but no failure detected, they passed
+    return {
+      status: "PASS",
+      error: null,
+    };
   }
 
   /**
@@ -706,9 +719,14 @@ async function main() {
   const args = process.argv.slice(2);
 
   if (args.length === 0) {
-    console.error("❌ Usage: node validate_story.js <story_file_path>");
+    console.error(
+      "❌ Usage: node validate_story.js <story_file_path> [--json]"
+    );
     console.error(
       "Example: node validate_story.js ./src/components/Button.stories.tsx"
+    );
+    console.error(
+      "Example: node validate_story.js ./src/components/Button.stories.tsx --json"
     );
     process.exit(1);
   }
@@ -737,16 +755,23 @@ async function main() {
   try {
     validator = new StoryValidator(storyFilePath);
     const isJsonMode = args.includes("--json");
-    const results = await validator.validate(isJsonMode);
+    const results = await validator.validate(isJsonMode); // Pass isJsonMode to control output
+
+    // Determine exit code based on results
+    let exitCode = 0;
+    if (results.summary?.overallStatus === "FAIL") {
+      exitCode = 1; // Critical failures
+    } else if (results.summary?.overallStatus === "WARNING") {
+      exitCode = 2; // Warnings (non-critical issues)
+    }
 
     // Output JSON for programmatic use
     if (isJsonMode) {
       console.log(validator.getResultsJSON());
-      return; // Exit early to avoid duplicate output
+      process.exit(exitCode); // Exit with appropriate code
     }
 
-    // Exit with appropriate code
-    const exitCode = results.summary?.overallStatus === "FAIL" ? 1 : 0;
+    // Exit with appropriate code for normal mode
     process.exit(exitCode);
   } catch (error) {
     console.error("❌ Validation script failed:", error.message);
