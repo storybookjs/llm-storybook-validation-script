@@ -8,7 +8,6 @@
  * 2. Type Safety (TypeScript compilation)
  * 3. Render Test (Storybook test-runner)
  * 4. Component Story Format (CSF) compliance
- * 5. Project convention adherence
  *
  * Usage: node validate_story.js <story_file_path>
  */
